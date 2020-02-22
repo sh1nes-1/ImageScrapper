@@ -354,3 +354,4 @@ MigrationBackup/
 
 # Sh1ne
 chromedriver.exe
+.vscode

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from threading import Thread
 from ImageScrapper import ImageScrapper
+from pubsub import pub
 
 from wx import * # when release, remove this line
 
@@ -21,7 +22,7 @@ TEXT_FONT_SIZE = 12
 TEXT_INPUT_FONT_SIZE = 12
 
 # Other
-SEARCH_ENGINES = ["Google", "Flickr", "PicSearch", "Pinterest"]
+SEARCH_ENGINES = ["Google", "DuckDuckGo", "Flickr", "PicSearch", "Pinterest"]
 
 # Default values for each input
 INPUT_DEFAULT_VALUES = {
@@ -127,6 +128,9 @@ class MainFrame(wx.Frame):
         # Download
         self.download = wx.Button(panel, label="Завантажити", pos=GetNextPos(self.image_extension_gif, topMargin=10), size=(200, 30))
 
+        # Gauge progress
+        self.gauge = wx.Gauge(panel, range=100, pos=GetNextPos(self.image_extension_gif, topMargin=10, leftMargin=230), size=(280, 30))        
+
         # Menu
         self.initMenu()
 
@@ -138,11 +142,15 @@ class MainFrame(wx.Frame):
         self.download.Bind(wx.EVT_BUTTON, self.onDownloadClick)
         self.Bind(wx.EVT_CLOSE, self.onClose)
 
+        # Subscribes
+        pub.subscribe(self.onDownloadProgressChanged, 'downloadProgressChanged')
+        pub.subscribe(self.onDownloadFinished, 'downloadFinished')        
+
         # Properties
         self.current_settings_path = None
         self.updateProjectNameInTitle()
 
-        self.imageScrapper = None        
+        self._image_scrapper = None        
 
         # Show form
         self.Center()
@@ -177,42 +185,42 @@ class MainFrame(wx.Frame):
         self.image_extension_gif.SetValue(input_values["image_extension_gif"])
 
     def initMenu(self):    
-        menuBar = wx.MenuBar() 
+        menu_bar = wx.MenuBar() 
 
-        fileMenu = wx.Menu() 
+        file_menu = wx.Menu() 
 
-        createProject = wx.MenuItem(fileMenu, id=wx.ID_ANY, text = "Створити проект\tCtrl+N", kind = wx.ITEM_NORMAL) 
-        fileMenu.Append(createProject) 		
+        create_project = wx.MenuItem(file_menu, id=wx.ID_ANY, text = "Створити проект\tCtrl+N", kind = wx.ITEM_NORMAL) 
+        file_menu.Append(create_project) 		
 
-        openProject = wx.MenuItem(fileMenu, id=wx.ID_ANY, text = "Відкрити проект\tCtrl+O", kind = wx.ITEM_NORMAL) 
-        fileMenu.Append(openProject)         		
+        open_project = wx.MenuItem(file_menu, id=wx.ID_ANY, text = "Відкрити проект\tCtrl+O", kind = wx.ITEM_NORMAL) 
+        file_menu.Append(open_project)         		
 
-        fileMenu.AppendSeparator()
+        file_menu.AppendSeparator()
 
-        saveProject = wx.MenuItem(fileMenu, id=wx.ID_ANY, text = "Зберегти\tCtrl+S", kind = wx.ITEM_NORMAL) 
-        fileMenu.Append(saveProject) 	       
+        save_project = wx.MenuItem(file_menu, id=wx.ID_ANY, text = "Зберегти\tCtrl+S", kind = wx.ITEM_NORMAL) 
+        file_menu.Append(save_project) 	       
 
-        saveProjectAs = wx.MenuItem(fileMenu, id=wx.ID_ANY, text = "Зберегти як\tCtrl+Shift+S", kind = wx.ITEM_NORMAL) 
-        fileMenu.Append(saveProjectAs) 	          
+        save_project_as = wx.MenuItem(file_menu, id=wx.ID_ANY, text = "Зберегти як\tCtrl+Shift+S", kind = wx.ITEM_NORMAL) 
+        file_menu.Append(save_project_as) 	          
 
-        fileMenu.AppendSeparator()
+        file_menu.AppendSeparator()
 
-        exitApp = wx.MenuItem(fileMenu, id=wx.ID_ANY, text = "Вихід\tCtrl+Q", kind = wx.ITEM_NORMAL) 
-        fileMenu.Append(exitApp) 		
+        exit_app = wx.MenuItem(file_menu, id=wx.ID_ANY, text = "Вихід\tCtrl+Q", kind = wx.ITEM_NORMAL) 
+        file_menu.Append(exit_app) 		
 
-        menuBar.Append(fileMenu, 'Файл') 	
-        self.SetMenuBar(menuBar)        
+        menu_bar.Append(file_menu, 'Файл') 	
+        self.SetMenuBar(menu_bar)        
 
         # Bind handlers
-        self.Bind(wx.EVT_MENU, self.createProjectHandler, createProject)
-        self.Bind(wx.EVT_MENU, self.openProjectHandler, openProject)    
-        self.Bind(wx.EVT_MENU, self.saveProjectHandler, saveProject)  
-        self.Bind(wx.EVT_MENU, self.saveProjectAsHandler, saveProjectAs)  
-        self.Bind(wx.EVT_MENU, self.exitAppHandler, exitApp)    
+        self.Bind(wx.EVT_MENU, self.createProjectHandler, create_project)
+        self.Bind(wx.EVT_MENU, self.openProjectHandler, open_project)    
+        self.Bind(wx.EVT_MENU, self.saveProjectHandler, save_project)  
+        self.Bind(wx.EVT_MENU, self.saveProjectAsHandler, save_project_as)  
+        self.Bind(wx.EVT_MENU, self.exitAppHandler, exit_app)    
 
     def readDictFromJson(self, json_path):
         try:
-            with io.open(json_path) as json_file:
+            with io.open(json_path, 'r', encoding='utf-8') as json_file:
                 return json.load(json_file)
         except:
             return None
@@ -225,18 +233,18 @@ class MainFrame(wx.Frame):
         except:
             return None
 
-    def updateProjectNameInTitle(self, isSaved=False):
-        newTitle = WINDOW_TITLE + " − "
+    def updateProjectNameInTitle(self, is_saved=False):
+        new_title = WINDOW_TITLE + " − "
 
         if self.current_settings_path:
-            newTitle += Path(self.current_settings_path).stem
+            new_title += Path(self.current_settings_path).stem
         else:
-            newTitle += "Новий проект"
+            new_title += "Новий проект"
 
-        if not isSaved:
-            newTitle += "*"
+        if not is_saved:
+            new_title += "*"
 
-        self.SetTitle(newTitle)
+        self.SetTitle(new_title)
 
     def createProjectHandler(self, event):
         if self.current_settings_path:
@@ -291,41 +299,48 @@ class MainFrame(wx.Frame):
             wx.MessageBox("Виберіть пошукову систему зі списку!")
             return
 
-        imageContentTypes = []
+        image_contentTypes = []
         
         if self.image_extension_jpg.IsChecked():
-            imageContentTypes.append("image/jpg")
-            imageContentTypes.append("image/jpeg")
+            image_contentTypes.append("image/jpg")
+            image_contentTypes.append("image/jpeg")
 
         if self.image_extension_png.IsChecked():
-            imageContentTypes.append("image/png")
+            image_contentTypes.append("image/png")
 
         if self.image_extension_gif.IsChecked():
-            imageContentTypes.append("image/gif")
+            image_contentTypes.append("image/gif")
 
-        if len(imageContentTypes) == 0:
+        if len(image_contentTypes) == 0:
             wx.MessageBox("Виберіть хоча б одне розширення зображення!")
             return        
 
         minResolution = (self.min_resolution_width.Value, self.min_resolution_height.Value)
         maxResolution = (self.max_resolution_width.Value, self.max_resolution_height.Value)        
 
-        self.imageScrapper = ImageScrapper()
-        Thread(target=self.imageScrapper.downloadImages,
+        self._image_scrapper = ImageScrapper()
+        Thread(target=self._image_scrapper.downloadImages,
             args=(self.search_query.Value, 
             self.search_engine.Value, 
             self.max_images_count.Value, 
             minResolution, 
             maxResolution,
-            imageContentTypes,
+            image_contentTypes,
             self.save_dir.Path)).start()
 
-        #self.Hide()
-        #wx.MessageBox("Завантаження завершено!")
+        self.gauge.SetValue(0)
+        self.download.Enabled = False
+
+    def onDownloadProgressChanged(self, progress):
+        self.gauge.SetValue(progress)
+
+    def onDownloadFinished(self):
+        wx.MessageBox("Завантаження завершено!")
+        self.download.Enabled = True
 
     def onClose(self, event):
-        if self.imageScrapper:
-            self.imageScrapper.terminate()
+        if self._image_scrapper:
+            self._image_scrapper.terminate()
         event.Skip()
 
 if __name__ == '__main__':
