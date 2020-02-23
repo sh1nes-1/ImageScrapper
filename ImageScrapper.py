@@ -4,6 +4,7 @@ from selenium import webdriver
 import urllib3
 
 from SearchEngines import SEARCH_ENGINES
+from SearchEngines import isResolutionValid
 from SearchEngines import processImageGoogle
 from SearchEngines import processImageDuckDuckGo
 
@@ -33,7 +34,6 @@ class ImageScrapper:
                     wd.execute_script("document.querySelector('"+SEARCH_ENGINES[search_engine]["selectors"]["load_more"]+"').click();")
         except Exception as ex:
             print("_tryLoadMoreImages: ", ex)
-            pass
 
     def _findImagesAndDownload(self, search_query, search_engine, max_images_count, min_resolution, max_resolution, valid_contentTypes, save_dir):
         def scroll_to_end(wd):
@@ -84,12 +84,8 @@ class ImageScrapper:
                 resolution = resolution_el.get_attribute("innerHTML").split(SEARCH_ENGINES[search_engine]["image_resolution_divider"])
                 resolution[0], resolution[1] = int(resolution[0]), int(resolution[1])
 
-                # Check if image resolution bigger than minResolution
-                if (resolution[0] < min_resolution[0]) or (resolution[1] < min_resolution[1]):
-                    continue
-
-                # Check if image resolution smaller than maxResolution
-                if (resolution[0] > max_resolution[0]) or (resolution[1] > max_resolution[1]):
+                # check resolution
+                if not isResolutionValid(resolution, min_resolution, max_resolution):
                     continue
 
                 # call processImage function depending on search engine

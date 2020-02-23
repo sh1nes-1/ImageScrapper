@@ -23,15 +23,36 @@ SEARCH_ENGINES = {
 
             "image": "img.n3VNCb", 
             "actual_resolution": "span.VSIspc",     
-            "loading_progressbar": "div.k7O2sd"
+            "loading_progressbar": "div.k7O2sd",
             }
         },
     "DuckDuckGo" : {
         "search_url": "https://duckduckgo.com/?q={q}&iar=images&iax=images&ia=images",
-        "thumbnail_css_selector": "img.tile--img__img",    
-        "image_link_selector": "a.detail__media__img-link"
+        "image_resolution_divider": " × ",
+        "selectors": {
+            "thumbnail": "img.tile--img__img",    
+            "image_resolution": "div.tile--img__dimensions > em",
+
+            "image_link": "a.detail__media__img-link",
+            "actual_resolution": "div.c-detail__filemeta",
+            }
         }
     }
+
+def getTrueImageResolution(url):
+    file = urlopen(Request(url, headers={'User-Agent': USER_AGENT}))
+    p = ImageFile.Parser()
+
+    while True:
+        data = file.read(1024)
+        if not data:
+            break
+        p.feed(data)
+        if p.image:
+            return p.image.size
+
+    file.close()
+    return None
 
 def getImageContentType(url):
     response = requests.head(url, verify=False)
@@ -47,13 +68,8 @@ def getStringHash(strToHash):
 def getImageFileName(imgUrl, imgContentType):
     return getStringHash(imgUrl) + "." + imgContentType.replace("image/", "")
 
-def isImageValid(img_url, img_resolution, min_resolution, max_resolution, img_contentType, valid_contentTypes):
-    # Check if img parameters is valid
-    if (not img_url) or (not img_contentType) or (not img_resolution):
-        return False
-    
-    # Check if image content type is valid
-    if not (img_contentType in valid_contentTypes):
+def isResolutionValid(img_resolution, min_resolution, max_resolution):
+    if not img_resolution:
         return False
 
     # Check if image resolution bigger than minResolution
@@ -66,19 +82,41 @@ def isImageValid(img_url, img_resolution, min_resolution, max_resolution, img_co
 
     return True
 
-def tryDownloadImage(imgUrl, search_engine, img_resolution, min_resolution, max_resolution, valid_contentTypes, save_dir):
-    try:
-        img_contentType = getImageContentType(imgUrl)
+def isContentTypeValid(img_contentType, valid_contentTypes):
+    if not img_contentType:
+        return False
 
-        if isImageValid(imgUrl, img_resolution, min_resolution, max_resolution, img_contentType, valid_contentTypes):
-            image_fileName = getImageFileName(imgUrl, img_contentType)
+    return img_contentType in valid_contentTypes
+
+def isImageValid(img_url, img_resolution, min_resolution, max_resolution, img_contentType, valid_contentTypes):
+    if (not img_url):
+        return False
+   
+    if not isContentTypeValid(img_contentType, valid_contentTypes):
+        return False
+
+    if not isResolutionValid(img_resolution, min_resolution, max_resolution):
+        return False
+
+    return True
+
+def tryDownloadImage(img_url, search_engine, img_resolution, min_resolution, max_resolution, valid_contentTypes, save_dir):
+    try:
+        img_contentType = getImageContentType(img_url)
+
+        if isImageValid(img_url, img_resolution, min_resolution, max_resolution, img_contentType, valid_contentTypes):
+            image_fileName = getImageFileName(img_url, img_contentType)
             save_filePath = os.path.join(save_dir, image_fileName)
 
             if os.path.exists(save_filePath):
                 return False
 
-            downloadImage(imgUrl, save_filePath)
-            print(imgUrl + " $$ " + image_fileName)
+            # check resolution of image by url (because google can display cached resolution, but link can be new)
+            if not isResolutionValid(getTrueImageResolution(img_url), min_resolution, max_resolution):
+                return False
+
+            downloadImage(img_url, save_filePath)
+            print(img_url + " $$ " + image_fileName)
             return True 
     except Exception as ex:        
         print("tryDownloadImage: ", ex)
@@ -86,7 +124,7 @@ def tryDownloadImage(imgUrl, search_engine, img_resolution, min_resolution, max_
     return False
 
 # Returns True if image was downloaded
-def processImageGoogle(wd, search_engine, min_resolution, max_resolution, valid_contentTypes, saveDir):
+def processImageGoogle(wd, search_engine, min_resolution, max_resolution, valid_contentTypes, save_dir):
     try:
         # wait for load of image IMAGE_LOAD_RETRIES * IMAGE_LOAD_SLEEP_TIME seconds
         # if image will not load, preview will be downloaded
@@ -111,16 +149,16 @@ def processImageGoogle(wd, search_engine, min_resolution, max_resolution, valid_
             return False
 
         for actual_image, actual_resolution in zip(actual_images, actual_resolutions):          
-            imgUrl = actual_image.get_attribute("src")
+            img_url = actual_image.get_attribute("src")
 
-            if imgUrl.startswith("data:"):
+            if img_url.startswith("data:"):
                 # print("Skip data: image")
                 continue
 
             resolution = actual_resolution.get_attribute("innerHTML").split(SEARCH_ENGINES[search_engine]["image_resolution_divider"])
             resolution[0], resolution[1] = int(resolution[0]), int(resolution[1])
 
-            if tryDownloadImage(imgUrl, search_engine, resolution, min_resolution, max_resolution, valid_contentTypes, saveDir):
+            if tryDownloadImage(img_url, search_engine, resolution, min_resolution, max_resolution, valid_contentTypes, save_dir):
                 return True
     except Exception as ex:
         print("processImageGoogle: ", ex)   
@@ -128,19 +166,30 @@ def processImageGoogle(wd, search_engine, min_resolution, max_resolution, valid_
     return False
 
 # Returns True if image was downloaded
-def processImageDuckDuckGo(wd, search_engine, min_resolution, max_resolution, valid_contentTypes, save_dir):             
-    time.sleep(IMAGE_LOAD_SLEEP_TIME)
+def processImageDuckDuckGo(wd, search_engine, min_resolution, max_resolution, valid_contentTypes, save_dir):   
+    try:
+        time.sleep(IMAGE_LOAD_SLEEP_TIME)
+  
+        # actual_images would be array with 3 elements (prev, current, next, but random order)
+        actual_image_links = wd.find_elements_by_css_selector(SEARCH_ENGINES[search_engine]["selectors"]["image_link"]) 
+        actual_resolutions = wd.find_elements_by_css_selector(SEARCH_ENGINES[search_engine]["selectors"]["actual_resolution"])               
+        
+        if len(actual_image_links) != len(actual_resolutions):
+            print("ERROR: Length of actual_image_links not equal to length of actual_resolutions")
+            return False
 
-    # extract image urls    
-    image_links = wd.find_elements_by_css_selector(SEARCH_ENGINES[search_engine]["image_link_selector"])  
+        for actual_image_link, actual_resolution in zip(actual_image_links, actual_resolutions):              
+            img_url = actual_image_link.get_attribute("href")
 
-    for image_link in image_links:                
-        imgUrl = image_link.get_attribute("href")
+            if img_url.startswith("data:"):
+                continue
 
-        if imgUrl.startswith("data:"):
-            continue
+            resolution = actual_resolution.get_attribute("innerHTML").split(SEARCH_ENGINES[search_engine]["image_resolution_divider"])
+            resolution[0], resolution[1] = int(resolution[0]), int(resolution[1])
 
-        #if tryDownloadImage(imgUrl, searchEngine, actual_resolution, minResolution, maxResolution, imageContentTypes, saveDir):
-            #return True
+            if tryDownloadImage(img_url, search_engine, resolution, min_resolution, max_resolution, valid_contentTypes, save_dir):
+                return True
+    except Exception as ex:
+        print("processImageDuckDuckGo: ", ex)   
 
     return False
