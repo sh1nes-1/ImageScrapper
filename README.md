@@ -11,6 +11,9 @@ pip install wxpython
 ```
 pip install pypubsub
 ```
+```
+pip install pillow
+```
 
 ### Скріншоти
 ![Вигляд програми](Screenshots/Screenshot_1.png?raw=true "Вигляд програми")
