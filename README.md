@@ -12,7 +12,7 @@ pip install wxpython
 pip install pypubsub
 ```
 ```
-pip install pillow
+pip install requests
 ```
 
 ### Скріншоти
