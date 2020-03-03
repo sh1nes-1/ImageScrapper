@@ -22,7 +22,7 @@ TEXT_FONT_SIZE = 12
 TEXT_INPUT_FONT_SIZE = 12
 
 # Other
-SEARCH_ENGINES = ["Google", "DuckDuckGo", "Flickr", "PicSearch", "Pinterest"]
+SEARCH_ENGINES = ["Google", "DuckDuckGo"]
 
 # Default values for each input
 INPUT_DEFAULT_VALUES = {
