@@ -18,8 +18,7 @@ SEARCH_ENGINES = {
         "image_resolution_divider": " × ",
         "selectors": {
             "load_more": "input.mye4qd",
-            "thumbnail": "img.rg_i",   
-            "image_resolution": "div.O1vY7 > span",                           
+            "thumbnail": "img.rg_i",                            
 
             "image": "img.n3VNCb", 
             "actual_resolution": "span.VSIspc",     
@@ -31,7 +30,6 @@ SEARCH_ENGINES = {
         "image_resolution_divider": " × ",
         "selectors": {
             "thumbnail": "img.tile--img__img",    
-            "image_resolution": "div.tile--img__dimensions > em",
 
             "image_link": "a.detail__media__img-link",
             "actual_resolution": "div.c-detail__filemeta",
@@ -74,10 +72,12 @@ def isResolutionValid(img_resolution, min_resolution, max_resolution):
 
     # Check if image resolution bigger than minResolution
     if (img_resolution[0] < min_resolution[0]) or (img_resolution[1] < min_resolution[1]):
+        print("NOT VALID (Lower resolution): " + str(img_resolution))
         return False
 
     # Check if image resolution smaller than maxResolution
     if (img_resolution[0] > max_resolution[0]) or (img_resolution[1] > max_resolution[1]):
+        print("NOT VALID (Bigger resolution): " + str(img_resolution))
         return False        
 
     return True

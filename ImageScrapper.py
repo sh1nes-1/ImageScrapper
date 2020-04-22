@@ -44,10 +44,10 @@ class ImageScrapper:
         search_url = SEARCH_ENGINES[search_engine]["search_url"]
 
         # create chrome driver
-        options = webdriver.ChromeOptions()
+        options = webdriver.FirefoxOptions()
         options.add_argument('--ignore-certificate-errors')
         options.add_argument('--ignore-ssl-errors')
-        wd = webdriver.Chrome(chrome_options=options)
+        wd = webdriver.Firefox(firefox_options=options)
 
         # load the page
         wd.get(search_url.format(q=search_query))
@@ -60,18 +60,11 @@ class ImageScrapper:
 
             # get all image thumbnail results
             thumbnail_results = wd.find_elements_by_css_selector(SEARCH_ENGINES[search_engine]["selectors"]["thumbnail"])
-            images_resolution = wd.find_elements_by_css_selector(SEARCH_ENGINES[search_engine]["selectors"]["image_resolution"])
-
             thumbnail_count = len(thumbnail_results)
-            resolution_count = len(images_resolution)
-
-            if thumbnail_count != resolution_count:
-                print("Thumbnail and resolution count mismatch!")
-                continue
             
             print(f"Found: {thumbnail_count} search results. Extracting links from {results_start}:{thumbnail_count}")
             
-            for image, resolution_el in zip(thumbnail_results[results_start:thumbnail_count], images_resolution[results_start:thumbnail_count]): 
+            for image in thumbnail_results[results_start:thumbnail_count]: 
                 # if thread was terminated
                 if not self._running:
                     break
@@ -79,13 +72,6 @@ class ImageScrapper:
                 try:
                     image.click()
                 except:
-                    continue
-
-                resolution = resolution_el.get_attribute("innerHTML").split(SEARCH_ENGINES[search_engine]["image_resolution_divider"])
-                resolution[0], resolution[1] = int(resolution[0]), int(resolution[1])
-
-                # check resolution
-                if not isResolutionValid(resolution, min_resolution, max_resolution):
                     continue
 
                 # call processImage function depending on search engine
