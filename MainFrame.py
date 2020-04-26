@@ -6,7 +6,7 @@ from threading import Thread
 from ImageScrapper import ImageScrapper
 from pubsub import pub
 
-from wx import * # when release, remove this line
+from wx import *
 
 # Main Window Consts
 WINDOW_TITLE = "Завантаження зображень"

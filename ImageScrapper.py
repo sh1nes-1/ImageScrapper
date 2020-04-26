@@ -44,10 +44,10 @@ class ImageScrapper:
         search_url = SEARCH_ENGINES[search_engine]["search_url"]
 
         # create chrome driver
-        options = webdriver.FirefoxOptions()
+        options = webdriver.ChromeOptions()
         options.add_argument('--ignore-certificate-errors')
         options.add_argument('--ignore-ssl-errors')
-        wd = webdriver.Firefox(firefox_options=options)
+        wd = webdriver.Chrome(chrome_options=options)
 
         # load the page
         wd.get(search_url.format(q=search_query))
